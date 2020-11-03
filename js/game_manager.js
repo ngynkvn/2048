@@ -1,14 +1,15 @@
 function GameManager(size, InputManager, Actuator, StorageManager) {
-  this.size           = size; // Size of the grid
-  this.inputManager   = new InputManager;
+  this.size = size; // Size of the grid
+  this.inputManager = new InputManager;
   this.storageManager = new StorageManager;
-  this.actuator       = new Actuator;
+  this.actuator = new Actuator;
 
-  this.startTiles     = 2;
+  this.startTiles = 2;
 
   this.inputManager.on("move", this.move.bind(this));
   this.inputManager.on("restart", this.restart.bind(this));
   this.inputManager.on("keepPlaying", this.keepPlaying.bind(this));
+  this.inputManager.on("brute", this.brute.bind(this));
 
   this.setup();
 
@@ -39,17 +40,17 @@ GameManager.prototype.setup = function () {
 
   // Reload the game from a previous game if present
   if (previousState) {
-    this.grid        = new Grid(previousState.grid.size,
-                                previousState.grid.cells); // Reload grid
-    this.score       = previousState.score;
-    this.over        = previousState.over;
-    this.won         = previousState.won;
+    this.grid = new Grid(previousState.grid.size,
+      previousState.grid.cells); // Reload grid
+    this.score = previousState.score;
+    this.over = previousState.over;
+    this.won = previousState.won;
     this.keepPlaying = previousState.keepPlaying;
   } else {
-    this.grid        = new Grid(this.size);
-    this.score       = 0;
-    this.over        = false;
-    this.won         = false;
+    this.grid = new Grid(this.size);
+    this.score = 0;
+    this.over = false;
+    this.won = false;
     this.keepPlaying = false;
 
     // Add the initial tiles
@@ -82,10 +83,10 @@ GameManager.prototype.actuate = function () {
   }
 
   this.actuator.actuate(this.grid, {
-    score:      this.score,
-    over:       this.over,
-    won:        this.won,
-    bestScore:  this.storageManager.getBestScore(),
+    score: this.score,
+    over: this.over,
+    won: this.won,
+    bestScore: this.storageManager.getBestScore(),
     terminated: this.isGameTerminated()
   });
 
@@ -94,10 +95,10 @@ GameManager.prototype.actuate = function () {
 // Represent the current game as an object
 GameManager.prototype.serialize = function () {
   return {
-    grid:        this.grid.serialize(),
-    score:       this.score,
-    over:        this.over,
-    won:         this.won,
+    grid: this.grid.serialize(),
+    score: this.score,
+    over: this.over,
+    won: this.won,
     keepPlaying: this.keepPlaying
   };
 };
@@ -125,17 +126,37 @@ class AI {
     let state = this.game.serialize();
     let best_i = 0;
     let best_score = 0;
-    directions.forEach(i => {
+    let scores = directions.map(i => {
+      let update = this.move(state, i);
+      return this.track(update, depth);
+    })
+    scores.forEach((score, i) => {
       // Calculate the score for taking that move.
-      let score = this.track(this.move({...state}, i), depth - 1);
       if (score > best_score) {
         best_score = score;
         best_i = i;
       }
-    })
-    console.log(best_i);
+    });
     this.game.move(best_i);
   }
+
+  // Probabilistic
+  prob(depth) {
+    let transitions = this.game.grid.possibleTransitions();
+    let best_i = 0;
+    let best_score = 0;
+    scores = []
+    scores.forEach((score, i) => {
+      // Calculate the score for taking that move.
+      if (score > best_score) {
+        best_score = score;
+        best_i = i;
+      }
+    });
+    this.game.move(best_i);
+  }
+
+
 
   track(state, depth) {
     if (depth == 0) {
@@ -145,13 +166,13 @@ class AI {
       // Calculate the score for taking that move.
       let scores = directions.map(i => {
         let update = this.move(state, i);
+        // Avoid losing.
+        if (update.over){return 0;}
         return update.moved ? this.track(update, depth - 1) : update.score;
       });
       return Math.max(...scores);
     }
   }
-
-  
 
   move(state, direction) {
     const grid = new Grid(state.grid.size, state.grid.cells)
@@ -162,12 +183,40 @@ class AI {
       score: state.score + update.score,
     }
   }
+
+  heuristics(state) {
+    const grid = new Grid(state.grid.size, state.grid.cells)
+    // Check if we are building a nicely increasing board towards a corner.
+    const monotonicity = 0;
+    // Try and minimize the differences in neighboring edge weights.
+    let smoothness = 0;
+    grid.eachCell((x, y, t) => {
+      if (!t) return;
+      let neighbors = grid.cellNeighbors(x, y);
+      for (neighbor of neighbors) {
+        smoothness += Math.abs(t.value - neighbor.value);
+      }
+      // let emptyNeighbors = 4 - neighbors.length;
+      // smoothness += (emptyNeighbors * t.value);
+    })
+    const free_tiles = grid.countEmpty();
+    return { monotonicity, smoothness: -smoothness, free_tiles };
+  }
+
 }
 const UP = 0;
 const RIGHT = 1;
 const DOWN = 2;
 const LEFT = 2;
 let ai = new AI();
+
+GameManager.prototype.brute = function() {
+  if(this.brute_running) {
+    clearInterval(this.brute_running);
+  } else {
+    this.brute_running = setInterval(() => {ai.brute_force(5)}, 100);
+  }
+}
 
 // Move tiles on the grid in the specified direction
 GameManager.prototype.move = function (direction) {
@@ -178,9 +227,9 @@ GameManager.prototype.move = function (direction) {
 
   var cell, tile;
 
-  var vector     = this.getVector(direction);
+  var vector = this.getVector(direction);
   var traversals = this.buildTraversals(vector);
-  var moved      = false;
+  var moved = false;
 
   // Save the current tile positions and remove merger information
   this.prepareTiles();
@@ -193,7 +242,7 @@ GameManager.prototype.move = function (direction) {
 
       if (tile) {
         var positions = self.grid.findFarthestPosition(cell, vector);
-        var next      = self.grid.cellContent(positions.next);
+        var next = self.grid.cellContent(positions.next);
 
         // Only one merger per row traversal?
         if (next && next.value === tile.value && !next.mergedFrom) {
@@ -237,9 +286,9 @@ GameManager.prototype.move = function (direction) {
 GameManager.prototype.getVector = function (direction) {
   // Vectors representing tile movement
   var map = {
-    0: { x: 0,  y: -1 }, // Up
-    1: { x: 1,  y: 0 },  // Right
-    2: { x: 0,  y: 1 },  // Down
+    0: { x: 0, y: -1 }, // Up
+    1: { x: 1, y: 0 },  // Right
+    2: { x: 0, y: 1 },  // Down
     3: { x: -1, y: 0 }   // Left
   };
 

@@ -36,13 +36,38 @@ Grid.prototype.addRandomTile = function () {
 };
 
 Grid.prototype.possibleTransitions = function () {
-  [0, 1, 2, 3].map(direction => {
-    const grid = new Grid(this.size, this.cells);
-    grid.move(direction);
+  return [0, 1, 2, 3].map(direction => {
+    const grid = this.clone();
+    const transition = grid.move(direction, true);
+    const possibilities = []
+    if(transition.over) {
+      return possibilities
+    }
+    transition.grid.availableCells().forEach(cell => {
+      let t1 = transition.grid.clone();
+      t1.insertTile(new Tile(cell, 2));
+      let t2 = transition.grid.clone();
+      t2.insertTile(new Tile(cell, 4));
+      possibilities.push({score: transition.score, outcome: t1, p: 0.9})
+      possibilities.push({score: transition.score, outcome: t2, p: 0.1})
+    })
+    return possibilities
   })
 }
 
-Grid.prototype.move = function(direction) {
+Grid.prototype.equal = function(other) {
+  let equal = true; 
+  this.eachCell((x, y, t) => {
+    equal = equal && other.cellContent({x, y}) == t;
+  });
+  return equal;
+}
+
+Grid.prototype.clone = function() {
+  return new Grid(this.size, this.cells);
+}
+
+Grid.prototype.move = function(direction, prevent) {
     var vector = this.getVector(direction);
     var traversals = this.buildTraversals(vector);
     var moved = false;
@@ -85,10 +110,10 @@ Grid.prototype.move = function(direction) {
       });
     });
 
-    if (moved) {
+    if (moved && !prevent) {
       this.addRandomTile();
     }
-    return {score, grid: this.serialize(), moved, over: !this.movesAvailable()};
+    return {score, grid: this.clone(), moved, over: !this.movesAvailable()};
 }
 
 Grid.prototype.positionsEqual = function (first, second) {
@@ -102,7 +127,7 @@ Grid.prototype.fromState = function (state) {
 
     for (var y = 0; y < this.size; y++) {
       var tile = state[x][y];
-      row.push(tile ? new Tile(tile.position, tile.value) : null);
+      row.push(tile ? new Tile(tile.position || {x: tile.x, y: tile.y}, tile.value) : null);
     }
   }
 
@@ -170,6 +195,15 @@ Grid.prototype.cellContent = function (cell) {
     return null;
   }
 };
+
+// Return all valid / existant neighbors.
+Grid.prototype.cellNeighbors = function (cell) {
+  let deltas = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+  return deltas.map(d => {
+    let [dx, dy] = d
+    return this.cellContent(cell.x + dx, cell.y + dy);
+  }).filter(Boolean);
+}
 
 // Inserts a tile at its position
 Grid.prototype.insertTile = function (tile) {
