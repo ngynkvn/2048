@@ -122,17 +122,19 @@ class AI {
   // Basic Search Tree.
   brute_force(depth) {
     let directions = [0, 1, 2, 3];
-    // Calculate the score for taking that move.
     let state = this.game.serialize();
-    let scores = directions.map(i => {
-      return [this.track(this.move({...state}, i), depth - 1), i];
+    let best_i = 0;
+    let best_score = 0;
+    directions.forEach(i => {
+      // Calculate the score for taking that move.
+      let score = this.track(this.move({...state}, i), depth - 1);
+      if (score > best_score) {
+        best_score = score;
+        best_i = i;
+      }
     })
-    let best = scores.reduce((p, c) => {
-      if(!p) return c;
-      if(p[0] < c[0]) return c;
-      else return p;
-    });
-    this.game.move(best[1]);
+    console.log(best_i);
+    this.game.move(best_i);
   }
 
   track(state, depth) {
@@ -142,9 +144,8 @@ class AI {
       let directions = [0, 1, 2, 3];
       // Calculate the score for taking that move.
       let scores = directions.map(i => {
-        const signal = {}
-        let update = this.move(state, i, signal);
-        return signal.moved ? this.track(update, depth - 1) : update.score;
+        let update = this.move(state, i);
+        return update.moved ? this.track(update, depth - 1) : update.score;
       });
       return Math.max(...scores);
     }
@@ -152,65 +153,14 @@ class AI {
 
   
 
-  move(state, direction, signal) {
-    var vector = this.game.getVector(direction);
-    var traversals = this.game.buildTraversals(vector);
-    var moved = false;
-
+  move(state, direction) {
     const grid = new Grid(state.grid.size, state.grid.cells)
-    // Save the current tile positions and remove merger information
-
-    // Traverse the grid in the right direction and move tiles
-    traversals.x.forEach(function (x) {
-      traversals.y.forEach(function (y) {
-        let cell = { x: x, y: y };
-        let tile = grid.cellContent(cell);
-
-        if (tile) {
-          var positions = grid.findFarthestPosition(cell, vector);
-          var next = grid.cellContent(positions.next);
-
-          // Only one merger per row traversal?
-          if (next && next.value === tile.value && !next.mergedFrom) {
-            var merged = new Tile(positions.next, tile.value * 2);
-            merged.mergedFrom = [tile, next];
-
-            grid.insertTile(merged);
-            grid.removeTile(tile);
-
-            // Converge the two tiles' positions
-            tile.updatePosition(positions.next);
-
-            // Update the score
-            state.score += merged.value;
-
-            // The mighty 2048 tile
-            if (merged.value === 2048) self.won = true;
-          } else {
-            grid.moveTile(tile, positions.farthest);
-          }
-
-          if (!grid.positionsEqual(cell, tile)) {
-            moved = true; // The tile moved from its original cell!
-            //Todo, bleh.
-            if(signal) {
-              signal.moved = true;
-            }
-          }
-        }
-      });
-    });
-
-    if (moved) {
-      grid.addRandomTile();
-
-      if (!grid.movesAvailable()) {
-        state.over = true; // Game over!
-      }
-
+    let update = grid.move(direction);
+    return {
+      ...state,
+      ...update,
+      score: state.score + update.score,
     }
-    state.grid = grid.serialize();
-    return state;
   }
 }
 const UP = 0;
@@ -312,6 +262,7 @@ GameManager.prototype.buildTraversals = function (vector) {
 
   return traversals;
 };
+Grid.prototype.buildTraversals = GameManager.prototype.buildTraversals;
 
 
 Grid.prototype.movesAvailable = function () {
