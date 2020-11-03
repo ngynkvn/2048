@@ -18,9 +18,29 @@ Grid.prototype.empty = function () {
   return cells;
 };
 
+// Move a tile and its representation
+Grid.prototype.moveTile = function (tile, cell) {
+  this.cells[tile.x][tile.y] = null;
+  this.cells[cell.x][cell.y] = tile;
+  tile.updatePosition(cell);
+};
+
+// Adds a tile in a random position
+Grid.prototype.addRandomTile = function () {
+  if (this.cellsAvailable()) {
+    var value = Math.random() < 0.9 ? 2 : 4;
+    var tile = new Tile(this.randomAvailableCell(), value);
+
+    this.insertTile(tile);
+  }
+};
+
+Grid.prototype.positionsEqual = function (first, second) {
+  return first.x === second.x && first.y === second.y;
+};
+
 Grid.prototype.fromState = function (state) {
   var cells = [];
-
   for (var x = 0; x < this.size; x++) {
     var row = cells[x] = [];
 
@@ -92,6 +112,22 @@ Grid.prototype.insertTile = function (tile) {
 
 Grid.prototype.removeTile = function (tile) {
   this.cells[tile.x][tile.y] = null;
+};
+
+Grid.prototype.findFarthestPosition = function (cell, vector) {
+  var previous;
+
+  // Progress towards the vector direction until an obstacle is found
+  do {
+    previous = cell;
+    cell = { x: previous.x + vector.x, y: previous.y + vector.y };
+  } while (this.withinBounds(cell) &&
+    this.cellAvailable(cell));
+
+  return {
+    farthest: previous,
+    next: cell // Used to check if a merge is required
+  };
 };
 
 Grid.prototype.withinBounds = function (position) {
