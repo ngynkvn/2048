@@ -20,6 +20,6 @@ jobs:
         uses: dswistowski/surge-sh-action@v1
         with:
           domain: 'poor-view.surge.sh'
-          project: '$GITHUB_WORKSPACE'
+          project: '.'
           login: ${{ secrets.surge_login }}
           token: ${{ secrets.surge_token }}
