@@ -13,10 +13,11 @@ jobs:
     name: Publish to surge.sh
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        
       - name: Deploy to poor-brew.surge.sh
-        uses: 
-          - dswistowski/surge-sh-action@v1
-          - actions/checkout@v2
+        uses: dswistowski/surge-sh-action@v1
         with:
           domain: 'poor-view.surge.sh'
           project: '$GITHUB_WORKSPACE'
